@@ -7,6 +7,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 import axios from "axios";
 import InfiniteScroll from "react-infinite-scroll-component";
+import { track } from "@vercel/analytics";
 
 const API_URL = "https://api.unsplash.com";
 const API_KEY = process.env.REACT_APP_API_KEY;
@@ -35,6 +36,9 @@ function App() {
       setImages([]);
       setCurrentPage(1);
       getImages();
+      track("search", {
+        searchQuery: searchInput.current.value,
+      });
     },
     [searchInput]
   );
