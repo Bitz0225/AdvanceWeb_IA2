@@ -7,7 +7,6 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 import axios from "axios";
 import InfiniteScroll from "react-infinite-scroll-component";
-import useAnalyticsEventTracker from "./index.js";
 
 const API_URL = "https://api.unsplash.com";
 const API_KEY = process.env.REACT_APP_API_KEY;
@@ -30,11 +29,8 @@ function App() {
     } catch (error) {}
   }, [currentPage]);
 
-  const gaEventTracker = useAnalyticsEventTracker("Images Search");
-
   const handleSearch = useCallback(
     (e) => {
-      gaEventTracker("Search", searchInput.current.value);
       e.preventDefault();
       setImages([]);
       setCurrentPage(1);

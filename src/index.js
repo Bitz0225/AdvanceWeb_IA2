@@ -3,17 +3,12 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import ReactGA from "react-ga4";
 
-ReactGA.initialize("G-DTDNFDRG6Z");
+ReactGA.initialize({
+  trackingId: "G-DTDNFDRG6Z",
+});
 
-const useAnalyticsEventTracker = (category) => {
-  const eventTracker = (action = "test action", label = "test label") => {
-    ReactGA.event({ category, action, label });
-  };
-  return eventTracker;
-};
-export default useAnalyticsEventTracker;
-
-ReactGA.send("pageview");
+// Send pageview with a custom path
+ReactGA.send({ hitType: "pageview", page: "/my-path", title: "Custom Title" });
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
