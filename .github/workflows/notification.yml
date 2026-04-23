@@ -133,4 +133,4 @@ jobs:
               core.setFailed(`SendGrid error: ${await sgRes.text()}`);
             } else {
               core.info(`Email sent to ${toEmail}`);
-            }
+            } 
