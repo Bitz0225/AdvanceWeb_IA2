@@ -17,8 +17,6 @@ jobs:
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
         with:
           script: |
-            core.info(`EMAILS defined: ${!!process.env.COLLABORATOR_EMAILS}`);
-            core.info(`PATHS defined: ${!!process.env.COLLABORATOR_PATHS}`);
             const assignee = context.payload.assignee.login;
             const issue = context.payload.issue;
             const repo = context.repo;
@@ -34,13 +32,6 @@ jobs:
               core.warning(`Missing email or path for: ${assignee}`);
               return;
             }
-            
-            // Use path instead of originUrl — direct and deterministic
-            const codexDeepLink = `codex://new?path=${encodeURIComponent(localPath)}&prompt=${encodeURIComponent(codexPrompt)}`;
-            
-            // VSCode also supports opening a specific folder directly
-            const vscodePath = localPath.replace(/\\/g, '/');
-            const vscodeDeepLink = `vscode://file/${vscodePath.startsWith('/') ? vscodePath.slice(1) : vscodePath}`;
 
             // --- Codex deep link (codex://new) ---
             const codexPrompt = [
@@ -50,6 +41,13 @@ jobs:
               `Issue URL: ${issue.html_url}`,
               `Please explore the codebase, identify relevant files, and help me start working on a fix.`
             ].join(' ');
+
+            // Use path instead of originUrl — direct and deterministic
+            const codexDeepLink = `codex://new?path=${encodeURIComponent(localPath)}&prompt=${encodeURIComponent(codexPrompt)}`;
+            
+            // VSCode also supports opening a specific folder directly
+            const vscodePath = localPath.replace(/\\/g, '/');
+            const vscodeDeepLink = `vscode://file/${vscodePath.startsWith('/') ? vscodePath.slice(1) : vscodePath}`;
 
             // --- Install links ---
             const codexInstallUrl = 'https://developers.openai.com/codex/quickstart';
