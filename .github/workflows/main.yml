@@ -1,0 +1,130 @@
+name: Notify Assignee on Issue Assignment
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send email with Codex + VSCode deep links
+        uses: actions/github-script@v7
+        env:
+          COLLABORATOR_EMAILS: ${{ secrets.COLLABORATOR_EMAILS }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        with:
+          script: |
+            const assignee = context.payload.assignee.login;
+            const issue = context.payload.issue;
+            const repo = context.repo;
+            const repoUrl = `https://github.com/${repo.owner}/${repo.repo}`;
+
+            const emailMap = JSON.parse(process.env.COLLABORATOR_EMAILS);
+            const toEmail = emailMap[assignee];
+
+            if (!toEmail) {
+              core.warning(`No email found for: ${assignee}`);
+              return;
+            }
+
+            // --- Codex deep link (codex://new) ---
+            const codexPrompt = [
+              `I've been assigned GitHub issue #${issue.number} in ${repo.owner}/${repo.repo}.`,
+              `Title: ${issue.title}`,
+              `Description: ${(issue.body || 'No description provided.').replace(/[\r\n]+/g, ' ')}`,
+              `Issue URL: ${issue.html_url}`,
+              `Please explore the codebase, identify relevant files, and help me start working on a fix.`
+            ].join(' ');
+
+            const codexDeepLink = `codex://new?originUrl=${encodeURIComponent(repoUrl)}&prompt=${encodeURIComponent(codexPrompt)}`;
+
+            // --- VSCode deep link (open or clone repo) ---
+            const vscodeDeepLink = `vscode://vscode.git/clone?url=${encodeURIComponent(repoUrl)}`;
+
+            // --- Install links ---
+            const codexInstallUrl = 'https://developers.openai.com/codex/quickstart';
+            const vscodeInstallUrl = 'https://code.visualstudio.com/';
+
+            const emailHtml = `
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; color: #1a1a1a; background: #fff;">
+
+              <h2 style="color: #0969da; margin-bottom: 4px;">📋 You've been assigned an issue</h2>
+              <p style="margin-top: 0; color: #57606a; font-size: 14px;">Repo: <strong>${repo.owner}/${repo.repo}</strong> · Assigned by <strong>${context.payload.sender.login}</strong></p>
+
+              <table style="width:100%; border: 1px solid #d0d7de; border-radius: 8px; border-collapse: collapse; margin-bottom: 28px;">
+                <tr style="background:#f6f8fa;">
+                  <td style="padding: 12px 16px; font-weight: 600; width: 110px; font-size: 13px;">Issue</td>
+                  <td style="padding: 12px 16px; font-size: 14px;">
+                    <a href="${issue.html_url}" style="color:#0969da; font-weight:600;">#${issue.number}: ${issue.title}</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; font-size: 13px; vertical-align: top;">Description</td>
+                  <td style="padding: 12px 16px; font-size: 14px; line-height: 1.6;">
+                    ${(issue.body || 'No description provided.').replace(/\n/g, '<br>')}
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Action buttons -->
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+                <tr>
+                  <td style="padding-right: 8px; width: 50%;">
+                    <a href="${vscodeDeepLink}" style="
+                      display: block; text-align: center;
+                      background: #0066b8; color: white;
+                      text-decoration: none; padding: 13px 16px;
+                      border-radius: 8px; font-size: 14px; font-weight: 600;
+                    ">🖥️ Open in VSCode</a>
+                  </td>
+                  <td style="padding-left: 8px; width: 50%;">
+                    <a href="${codexDeepLink}" style="
+                      display: block; text-align: center;
+                      background: #10a37f; color: white;
+                      text-decoration: none; padding: 13px 16px;
+                      border-radius: 8px; font-size: 14px; font-weight: 600;
+                    ">🤖 Open in Codex</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size: 12px; color: #57606a; margin-top: 4px; margin-bottom: 28px;">
+                The <strong>Open in VSCode</strong> button opens your VSCode and loads the repo (or clones it if you don't have it yet).<br>
+                The <strong>Open in Codex</strong> button opens the Codex app, sets the workspace to this repo, and pre-fills the issue as your starting prompt.
+              </p>
+
+              <!-- Install guidance -->
+              <div style="background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px 20px;">
+                <p style="margin: 0 0 8px 0; font-weight: 600; font-size: 13px;">⚙️ First time? Make sure you have these installed:</p>
+                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #444; line-height: 2;">
+                  <li><a href="${vscodeInstallUrl}" style="color:#0969da;">Visual Studio Code</a> — free code editor</li>
+                  <li><a href="${codexInstallUrl}" style="color:#0969da;">Codex app</a> (macOS / Windows) — requires a ChatGPT Plus, Pro, or higher plan. After installing, sign in and make sure the <strong>${repo.owner}/${repo.repo}</strong> repo is cloned locally.</li>
+                </ul>
+              </div>
+
+            </body>
+            </html>`;
+
+            const sgRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                personalizations: [{ to: [{ email: toEmail }] }],
+                from: { email: process.env.SENDER_EMAIL },
+                subject: `[${repo.repo}] Issue #${issue.number} assigned to you: ${issue.title}`,
+                content: [{ type: 'text/html', value: emailHtml }]
+              })
+            });
+
+            if (!sgRes.ok) {
+              core.setFailed(`SendGrid error: ${await sgRes.text()}`);
+            } else {
+              core.info(`Email sent to ${toEmail}`);
+            }
