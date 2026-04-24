@@ -13,7 +13,7 @@ jobs:
         env:
           COLLABORATOR_EMAILS: ${{ secrets.COLLABORATOR_EMAILS }}
           COLLABORATOR_PATHS: ${{ secrets.COLLABORATOR_PATHS }}
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
         with:
           script: |
@@ -21,13 +21,11 @@ jobs:
             const issue = context.payload.issue;
             const repo = context.repo;
             const repoUrl = `https://github.com/${repo.owner}/${repo.repo}`;
-
             const emailMap = JSON.parse(process.env.COLLABORATOR_EMAILS);
             const pathMap = JSON.parse(process.env.COLLABORATOR_PATHS);
-
             const toEmail = emailMap[assignee];
             const localPath = pathMap[assignee];
-            
+
             if (!toEmail || !localPath) {
               core.warning(`Missing email or path for: ${assignee}`);
               return;
@@ -39,12 +37,13 @@ jobs:
               `Title: ${issue.title}`,
               `Description: ${(issue.body || 'No description provided.').replace(/[\r\n]+/g, ' ')}`,
               `Issue URL: ${issue.html_url}`,
+              `Local project path: ${localPath}`,
               `Please explore the codebase, identify relevant files, and help me start working on a fix.`
             ].join(' ');
 
             // Use path instead of originUrl — direct and deterministic
             const codexDeepLink = `codex://new?path=${encodeURIComponent(localPath)}&prompt=${encodeURIComponent(codexPrompt)}`;
-            
+
             // VSCode also supports opening a specific folder directly
             const vscodePath = localPath.replace(/\\/g, '/');
             const vscodeDeepLink = `vscode://file/${vscodePath.startsWith('/') ? vscodePath.slice(1) : vscodePath}`;
@@ -57,10 +56,8 @@ jobs:
             <!DOCTYPE html>
             <html>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; color: #1a1a1a; background: #fff;">
-
               <h2 style="color: #0969da; margin-bottom: 4px;">📋 You've been assigned an issue</h2>
               <p style="margin-top: 0; color: #57606a; font-size: 14px;">Repo: <strong>${repo.owner}/${repo.repo}</strong> · Assigned by <strong>${context.payload.sender.login}</strong></p>
-
               <table style="width:100%; border: 1px solid #d0d7de; border-radius: 8px; border-collapse: collapse; margin-bottom: 28px;">
                 <tr style="background:#f6f8fa;">
                   <td style="padding: 12px 16px; font-weight: 600; width: 110px; font-size: 13px;">Issue</td>
@@ -75,7 +72,6 @@ jobs:
                   </td>
                 </tr>
               </table>
-
               <!-- VSCode deep link -->
               <div style="margin-bottom: 20px;">
                 <p style="font-weight: 600; margin-bottom: 6px; font-size: 14px;">
@@ -97,7 +93,6 @@ jobs:
                   user-select: all;
                 ">${vscodeDeepLink}</pre>
               </div>
-
               <!-- Codex deep link -->
               <div style="margin-bottom: 28px;">
                 <p style="font-weight: 600; margin-bottom: 6px; font-size: 14px;">
@@ -119,12 +114,10 @@ jobs:
                   user-select: all;
                 ">${codexDeepLink}</pre>
               </div>
-
               <p style="font-size: 12px; color: #57606a; margin-top: 4px; margin-bottom: 28px;">
-                The <strong>Open in VSCode</strong> button opens your VSCode and loads the repo (or clones it if you don't have it yet).<br>
-                The <strong>Open in Codex</strong> button opens the Codex app, sets the workspace to this repo, and pre-fills the issue as your starting prompt.
+                The <strong>VSCode link</strong> opens your local project folder directly in VSCode.<br>
+                The <strong>Codex link</strong> opens the Codex app, sets the workspace to this repo, and pre-fills the issue as your starting prompt.
               </p>
-
               <!-- Install guidance -->
               <div style="background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px 20px;">
                 <p style="margin: 0 0 8px 0; font-weight: 600; font-size: 13px;">⚙️ First time? Make sure you have these installed:</p>
@@ -133,26 +126,26 @@ jobs:
                   <li><a href="${codexInstallUrl}" style="color:#0969da;">Codex app</a> (macOS / Windows) — requires a ChatGPT Plus, Pro, or higher plan. After installing, sign in and make sure the <strong>${repo.owner}/${repo.repo}</strong> repo is cloned locally.</li>
                 </ul>
               </div>
-
             </body>
             </html>`;
 
-            const sgRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
+            // --- Send via Resend ---
+            const resendRes = await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+                'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                personalizations: [{ to: [{ email: toEmail }] }],
-                from: { email: process.env.SENDER_EMAIL },
+                from: process.env.SENDER_EMAIL,
+                to: [toEmail],
                 subject: `[${repo.repo}] Issue #${issue.number} assigned to you: ${issue.title}`,
-                content: [{ type: 'text/html', value: emailHtml }]
+                html: emailHtml
               })
             });
 
-            if (!sgRes.ok) {
-              core.setFailed(`SendGrid error: ${await sgRes.text()}`);
+            if (!resendRes.ok) {
+              core.setFailed(`Resend error: ${await resendRes.text()}`);
             } else {
               core.info(`Email sent to ${toEmail}`);
-            } 
+            }
