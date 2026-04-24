@@ -137,7 +137,7 @@ jobs:
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                from: process.env.SENDER_EMAIL,
+                from: "onboarding@resend.dev",
                 to: [toEmail],
                 subject: `[${repo.repo}] Issue #${issue.number} assigned to you: ${issue.title}`,
                 html: emailHtml
